@@ -1322,6 +1322,8 @@ fn reload_all(
         })
         .collect();
 
+    let mut result = Ok(());
+
     for (doc_id, view_ids) in docs_view_ids {
         let doc = doc_mut!(cx.editor, &doc_id);
 
@@ -1331,23 +1333,28 @@ fn reload_all(
         // Ensure that the view is synced with the document's history.
         view.sync_changes(doc);
 
-        doc.reload(view, &cx.editor.diff_providers)?;
-        if let Some(path) = doc.path() {
-            cx.editor
-                .language_servers
-                .file_event_handler
-                .file_changed(path.clone());
-        }
+        match doc.reload(view, &cx.editor.diff_providers) {
+            Ok(()) => {
+                if let Some(path) = doc.path() {
+                    cx.editor
+                        .language_servers
+                        .file_event_handler
+                        .file_changed(path.clone());
+                }
 
-        for view_id in view_ids {
-            let view = view_mut!(cx.editor, view_id);
-            if view.doc.eq(&doc_id) {
-                view.ensure_cursor_in_view(doc, scrolloff);
+                for view_id in view_ids {
+                    let view = view_mut!(cx.editor, view_id);
+                    if view.doc.eq(&doc_id) {
+                        view.ensure_cursor_in_view(doc, scrolloff);
+                    }
+                }
             }
+            // TODO: Do something smarter with multiple errors.
+            Err(e) => result = Err(e),
         }
     }
 
-    Ok(())
+    result
 }
 
 /// Update the [`Document`] if it has been modified.
