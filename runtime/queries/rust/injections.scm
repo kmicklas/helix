@@ -21,6 +21,18 @@
        (identifier) @_macro_name
      ]
    (token_tree) @injection.content)
+ (#eq? @_macro_name "style")
+ (#set! injection.language "css")
+ (#set! injection.include-children))
+
+((macro_invocation
+   macro:
+     [
+       (scoped_identifier
+         name: (_) @_macro_name)
+       (identifier) @_macro_name
+     ]
+   (token_tree) @injection.content)
  (#eq? @_macro_name "slint")
  (#set! injection.language "slint")
  (#set! injection.include-children))
