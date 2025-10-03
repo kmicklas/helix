@@ -45,6 +45,7 @@ pub use helix_core::diagnostic::Severity;
 use helix_core::{
     auto_pairs::AutoPairs,
     diagnostic::DiagnosticProvider,
+    file_watcher::{self, Watcher},
     syntax::{
         self,
         config::{AutoPairConfig, IndentationHeuristic, LanguageServerFeature, SoftWrap},
@@ -376,6 +377,8 @@ pub struct Config {
     /// Whether to read settings from [EditorConfig](https://editorconfig.org) files. Defaults to
     /// `true`.
     pub editor_config: bool,
+    pub auto_reload: AutoReloadConfig,
+    pub file_watcher: file_watcher::Config,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq, PartialOrd, Ord)]
@@ -974,6 +977,44 @@ pub enum PopupBorderConfig {
     Menu,
 }
 
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq, PartialOrd, Ord)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
+pub struct AutoReloadConfig {
+    pub enable: bool,
+    pub prompt_if_modified: bool,
+    /// Poll for changes to files outside the watched workspace
+    pub poll: AutoReloadPoll,
+}
+
+impl Default for AutoReloadConfig {
+    fn default() -> Self {
+        AutoReloadConfig {
+            enable: true,
+            prompt_if_modified: true,
+            poll: AutoReloadPoll::default(),
+        }
+    }
+}
+
+/// Configuration for polling unwatched files for external changes
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq, PartialOrd, Ord)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
+pub struct AutoReloadPoll {
+    /// Enable polling for files outside the watched workspace
+    pub enable: bool,
+    /// Polling interval in milliseconds (default: 5000)
+    pub interval: u64,
+}
+
+impl Default for AutoReloadPoll {
+    fn default() -> Self {
+        AutoReloadPoll {
+            enable: true,
+            interval: 5000,
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -1035,6 +1076,8 @@ impl Default for Config {
             end_of_line_diagnostics: DiagnosticFilter::Disable,
             clipboard_provider: ClipboardProvider::default(),
             editor_config: true,
+            file_watcher: file_watcher::Config::default(),
+            auto_reload: AutoReloadConfig::default(),
         }
     }
 }
@@ -1136,6 +1179,7 @@ pub struct Editor {
 
     pub mouse_down_range: Option<Range>,
     pub cursor_cache: CursorCache,
+    pub file_watcher: Watcher,
 }
 
 pub type Motion = Box<dyn Fn(&mut Editor)>;
@@ -1213,6 +1257,15 @@ impl Editor {
         let conf = config.load();
         let auto_pairs = (&conf.auto_pairs).into();
 
+        // Initialize file watcher and diff providers
+        let mut file_watcher = Watcher::new(&conf.file_watcher);
+        let diff_providers = DiffProviderRegistry::default();
+
+        // Set up extra watched paths from VCS providers (e.g., external HEAD files for worktrees)
+        let (workspace, _) = helix_loader::find_workspace();
+        let extra_paths = diff_providers.get_watched_paths(&workspace);
+        file_watcher.set_extra_watched_paths(extra_paths);
+
         // HAXX: offset the render area height by 1 to account for prompt/commandline
         area.height -= 1;
 
@@ -1231,7 +1284,7 @@ impl Editor {
             theme: theme_loader.default(),
             language_servers,
             diagnostics: Diagnostics::new(),
-            diff_providers: DiffProviderRegistry::default(),
+            diff_providers,
             debug_adapters: dap::registry::Registry::new(),
             breakpoints: HashMap::new(),
             syn_loader,
@@ -1257,6 +1310,7 @@ impl Editor {
             handlers,
             mouse_down_range: None,
             cursor_cache: CursorCache::default(),
+            file_watcher,
         }
     }
 
@@ -1461,12 +1515,17 @@ impl Editor {
             }
             ls.did_rename(old_path, &new_path, is_dir);
         }
-        self.language_servers
-            .file_event_handler
-            .file_changed(old_path.to_owned());
-        self.language_servers
-            .file_event_handler
-            .file_changed(new_path);
+
+        if !self.file_watcher.is_watching(old_path) {
+            self.language_servers
+                .file_event_handler
+                .file_changed(old_path.to_owned());
+        }
+        if !self.file_watcher.is_watching(&new_path) {
+            self.language_servers
+                .file_event_handler
+                .file_changed(new_path);
+        }
         Ok(())
     }
 
@@ -1930,13 +1989,15 @@ impl Editor {
         let doc = doc_mut!(self, &doc_id);
         let doc_save_future = doc.save(path, force)?;
 
-        // When a file is written to, notify the file event handler.
-        // Note: This can be removed once proper file watching is implemented.
+        // When a file is written to, notify the file event handler if the watcher isn't active.
         let handler = self.language_servers.file_event_handler.clone();
+        let watcher_active = self.file_watcher.is_active();
         let future = async move {
             let res = doc_save_future.await;
-            if let Ok(event) = &res {
-                handler.file_changed(event.path.clone());
+            if !watcher_active {
+                if let Ok(event) = &res {
+                    handler.file_changed(event.path.clone());
+                }
             }
             res
         };
