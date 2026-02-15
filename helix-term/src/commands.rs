@@ -4716,17 +4716,17 @@ fn yank_absolute_filepath_with_line_column(cx: &mut Context) {
 }
 
 fn yank_absolute_filepath_to_clipboard(cx: &mut Context) {
-    yank_filepath_impl(cx.editor, '*', PathType::Absolute, None);
+    yank_filepath_impl(cx.editor, '+', PathType::Absolute, None);
 }
 
 fn yank_absolute_filepath_with_line_to_clipboard(cx: &mut Context) {
-    yank_filepath_impl(cx.editor, '*', PathType::Absolute, Some(PathCursor::Line));
+    yank_filepath_impl(cx.editor, '+', PathType::Absolute, Some(PathCursor::Line));
 }
 
 fn yank_absolute_filepath_with_line_column_to_clipboard(cx: &mut Context) {
     yank_filepath_impl(
         cx.editor,
-        '*',
+        '+',
         PathType::Absolute,
         Some(PathCursor::LineColumn),
     );
@@ -4760,17 +4760,17 @@ fn yank_relative_filepath_with_line_column(cx: &mut Context) {
 }
 
 fn yank_relative_filepath_to_clipboard(cx: &mut Context) {
-    yank_filepath_impl(cx.editor, '*', PathType::Relative, None);
+    yank_filepath_impl(cx.editor, '+', PathType::Relative, None);
 }
 
 fn yank_relative_filepath_with_line_to_clipboard(cx: &mut Context) {
-    yank_filepath_impl(cx.editor, '*', PathType::Relative, Some(PathCursor::Line));
+    yank_filepath_impl(cx.editor, '+', PathType::Relative, Some(PathCursor::Line));
 }
 
 fn yank_relative_filepath_with_line_column_to_clipboard(cx: &mut Context) {
     yank_filepath_impl(
         cx.editor,
-        '*',
+        '+',
         PathType::Relative,
         Some(PathCursor::LineColumn),
     );

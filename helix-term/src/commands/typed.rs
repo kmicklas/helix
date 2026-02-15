@@ -1084,7 +1084,7 @@ fn yank_absolute_filepath_to_clipboard(
         return Ok(());
     }
 
-    yank_filepath_impl(cx.editor, '*', PathType::Absolute, None);
+    yank_filepath_impl(cx.editor, '+', PathType::Absolute, None);
     Ok(())
 }
 
@@ -1097,7 +1097,7 @@ fn yank_absolute_filepath_with_line_to_clipboard(
         return Ok(());
     }
 
-    yank_filepath_impl(cx.editor, '*', PathType::Absolute, Some(PathCursor::Line));
+    yank_filepath_impl(cx.editor, '+', PathType::Absolute, Some(PathCursor::Line));
     Ok(())
 }
 
@@ -1112,7 +1112,7 @@ fn yank_absolute_filepath_with_line_column_to_clipboard(
 
     yank_filepath_impl(
         cx.editor,
-        '*',
+        '+',
         PathType::Absolute,
         Some(PathCursor::LineColumn),
     );
@@ -1182,7 +1182,7 @@ fn yank_relative_filepath_to_clipboard(
         return Ok(());
     }
 
-    yank_filepath_impl(cx.editor, '*', PathType::Relative, None);
+    yank_filepath_impl(cx.editor, '+', PathType::Relative, None);
     Ok(())
 }
 
@@ -1195,7 +1195,7 @@ fn yank_relative_filepath_with_line_to_clipboard(
         return Ok(());
     }
 
-    yank_filepath_impl(cx.editor, '*', PathType::Relative, Some(PathCursor::Line));
+    yank_filepath_impl(cx.editor, '+', PathType::Relative, Some(PathCursor::Line));
     Ok(())
 }
 
@@ -1210,7 +1210,7 @@ fn yank_relative_filepath_with_line_column_to_clipboard(
 
     yank_filepath_impl(
         cx.editor,
-        '*',
+        '+',
         PathType::Relative,
         Some(PathCursor::LineColumn),
     );
