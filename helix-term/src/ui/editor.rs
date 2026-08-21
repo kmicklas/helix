@@ -1477,25 +1477,29 @@ impl Component for EditorView {
                                 self.last_insert.1.push(InsertEvent::Key(key));
                             }
                         }
-                        Mode::Select if is_select_text_input(key) => match key.code {
-                            KeyCode::Char(c) => {
-                                let old_mode = self.enter_insert_mode(&mut cx);
-                                commands::insert::replace_selection_with_char(&mut cx, c);
-                                self.dispatch_mode_switch(&mut cx, old_mode);
+                        Mode::Select
+                            if self.keymaps.pending().is_empty() && is_select_text_input(key) =>
+                        {
+                            match key.code {
+                                KeyCode::Char(c) => {
+                                    let old_mode = self.enter_insert_mode(&mut cx);
+                                    commands::insert::replace_selection_with_char(&mut cx, c);
+                                    self.dispatch_mode_switch(&mut cx, old_mode);
+                                }
+                                KeyCode::Backspace | KeyCode::Delete => {
+                                    let old_mode = self.enter_insert_mode(&mut cx);
+                                    commands::insert::delete_selection(&mut cx);
+                                    self.dispatch_mode_switch(&mut cx, old_mode);
+                                }
+                                KeyCode::Enter | KeyCode::Tab => {
+                                    let old_mode = self.enter_insert_mode(&mut cx);
+                                    commands::insert::delete_selection(&mut cx);
+                                    self.insert_mode(&mut cx, key);
+                                    self.dispatch_mode_switch(&mut cx, old_mode);
+                                }
+                                _ => unreachable!(),
                             }
-                            KeyCode::Backspace | KeyCode::Delete => {
-                                let old_mode = self.enter_insert_mode(&mut cx);
-                                commands::insert::delete_selection(&mut cx);
-                                self.dispatch_mode_switch(&mut cx, old_mode);
-                            }
-                            KeyCode::Enter | KeyCode::Tab => {
-                                let old_mode = self.enter_insert_mode(&mut cx);
-                                commands::insert::delete_selection(&mut cx);
-                                self.insert_mode(&mut cx, key);
-                                self.dispatch_mode_switch(&mut cx, old_mode);
-                            }
-                            _ => unreachable!(),
-                        },
+                        }
                         mode => self.command_mode(mode, &mut cx, key),
                     }
                 }
@@ -1705,6 +1709,8 @@ fn continues_insert_batch(command: &commands::MappableCommand) -> bool {
             | "kill_to_line_end"
             | "insert_newline"
             | "insert_tab"
+            | "insert_comma"
+            | "insert_comma_space"
             | "smart_tab"
             | "insert_register"
     )
@@ -1716,8 +1722,9 @@ fn is_select_text_input(key: KeyEvent) -> bool {
         return false;
     }
 
-    matches!(
-        key.code,
-        KeyCode::Char(_) | KeyCode::Backspace | KeyCode::Delete | KeyCode::Enter | KeyCode::Tab
-    )
+    matches!(key.code, KeyCode::Char(c) if c != ',')
+        || matches!(
+            key.code,
+            KeyCode::Backspace | KeyCode::Delete | KeyCode::Enter | KeyCode::Tab
+        )
 }

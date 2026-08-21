@@ -466,6 +466,8 @@ impl MappableCommand {
         smart_tab, "Insert tab if all cursors have all whitespace to their left; otherwise, run a separate command.",
         insert_tab, "Insert tab char",
         insert_newline, "Insert newline char",
+        insert_comma, "Insert comma",
+        insert_comma_space, "Insert comma and space",
         delete_char_backward, "Delete previous char",
         delete_char_forward, "Delete next char",
         delete_word_backward, "Delete previous word",
@@ -4548,6 +4550,20 @@ fn later(cx: &mut Context) {
 fn commit_undo_checkpoint(cx: &mut Context) {
     let (view, doc) = current!(cx.editor);
     doc.append_changes_to_history(view);
+}
+
+fn insert_comma(cx: &mut Context) {
+    if cx.editor.mode == Mode::Select {
+        cx.editor.mode = Mode::Insert;
+        insert::replace_selection_with_char(cx, ',');
+    } else {
+        insert::insert_char(cx, ',');
+    }
+}
+
+fn insert_comma_space(cx: &mut Context) {
+    insert_comma(cx);
+    insert::insert_char(cx, ' ');
 }
 
 // Yank / Paste

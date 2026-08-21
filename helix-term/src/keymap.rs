@@ -534,6 +534,18 @@ mod tests {
             root.search(&[key!('Z')]).unwrap(),
             "Mismatch for view mode on `z` and `Z`"
         );
+        let insert = keymaps.get(&Mode::Insert).unwrap();
+        assert_eq!(
+            root.search(&[key!(' '), key!('f')]).unwrap(),
+            insert.search(&[key!(','), key!('f')]).unwrap(),
+            "Mismatch for the main menu on `Space` and insert-mode comma"
+        );
+        let select = keymaps.get(&Mode::Select).unwrap();
+        assert_eq!(
+            root.search(&[key!(' '), key!('f')]).unwrap(),
+            select.search(&[key!(','), key!('f')]).unwrap(),
+            "Mismatch for the main menu on `Space` and select-mode comma"
+        );
     }
 
     #[test]

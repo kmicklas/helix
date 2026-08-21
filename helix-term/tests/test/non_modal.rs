@@ -39,12 +39,35 @@ async fn inserts_without_entering_insert_mode() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn comma_menu_preserves_literal_comma_sequences() -> anyhow::Result<()> {
+    test_text(non_modal_builder(), "#[|]#", "a,,b, c", "a,b, c#[|]#").await
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn typing_replaces_multiple_selections() -> anyhow::Result<()> {
     test_text(
         non_modal_builder().with_mode(Mode::Select),
         "#[foo|]# x #(foo|)#",
         "xy",
         "xy#[|]# x xy#(|)#",
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn comma_menu_escapes_replace_multiple_selections() -> anyhow::Result<()> {
+    test_text(
+        non_modal_builder().with_mode(Mode::Select),
+        "#[foo|]# x #(foo|)#",
+        ",,x",
+        ",x#[|]# x ,x#(|)#",
+    )
+    .await?;
+    test_text(
+        non_modal_builder().with_mode(Mode::Select),
+        "#[foo|]# x #(foo|)#",
+        ", ",
+        ", #[|]# x , #(|)#",
     )
     .await
 }

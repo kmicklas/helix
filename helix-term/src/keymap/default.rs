@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use super::macros::keymap;
-use super::{KeyTrie, Mode};
+use super::{KeyTrie, KeyTrieNode, Mode};
 use helix_core::hashmap;
 
 pub fn default() -> HashMap<Mode, KeyTrie> {
@@ -337,6 +337,20 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
         "C-a" => increment,
         "C-x" => decrement,
     });
+    let space = "space".parse().unwrap();
+    let comma = ",".parse().unwrap();
+    let mut menu = normal.search(&[space]).unwrap().clone();
+    menu.merge_nodes(keymap!({ "Space"
+        "," => insert_comma,
+        "space" => insert_comma_space,
+    }));
+    let menu_alias = || {
+        KeyTrie::Node(KeyTrieNode::new(
+            "Insert mode",
+            hashmap!(comma => menu.clone()),
+            vec![comma],
+        ))
+    };
     let mut select = normal.clone();
     select.merge_nodes(keymap!({ "Select mode"
         "h" | "left" => extend_char_left,
@@ -376,7 +390,8 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
             "w" => extend_to_word,
         },
     }));
-    let insert = keymap!({ "Insert mode"
+    select.merge_nodes(menu_alias());
+    let mut insert = keymap!({ "Insert mode"
         "esc" => collapse_selection,
 
         "C-s" => commit_undo_checkpoint,
@@ -402,6 +417,7 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
         "home" => goto_line_start,
         "end" => goto_line_end_newline,
     });
+    insert.merge_nodes(menu_alias());
     hashmap!(
         Mode::Normal => normal,
         Mode::Select => select,
