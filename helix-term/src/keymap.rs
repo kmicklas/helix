@@ -546,6 +546,14 @@ mod tests {
             select.search(&[key!(','), key!('f')]).unwrap(),
             "Mismatch for the main menu on `Space` and select-mode comma"
         );
+        let ctrl_semicolon = "C-;".parse::<KeyEvent>().unwrap();
+        for mode in [Mode::Normal, Mode::Select, Mode::Insert] {
+            assert_eq!(
+                keymaps[&mode].search(&[ctrl_semicolon]).unwrap(),
+                &KeyTrie::MappableCommand(MappableCommand::command_mode),
+                "Ctrl-; should open command mode from {mode} mode"
+            );
+        }
     }
 
     #[test]

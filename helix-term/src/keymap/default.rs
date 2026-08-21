@@ -61,7 +61,7 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
             "." => goto_last_modification,
             "w" => goto_word,
         },
-        ":" => command_mode,
+        ":" | "C-;" => command_mode,
 
         "i" => insert_mode,
         "I" => insert_at_line_start,
@@ -393,6 +393,7 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
     select.merge_nodes(menu_alias());
     let mut insert = keymap!({ "Insert mode"
         "esc" => collapse_selection,
+        "C-;" => command_mode,
 
         "C-s" => commit_undo_checkpoint,
         "C-x" => completion,
