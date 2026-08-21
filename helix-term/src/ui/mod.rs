@@ -98,6 +98,7 @@ pub fn raw_regex_prompt(
     let doc_id = view.doc;
     let snapshot = doc.selection(view.id).clone();
     let offset_snapshot = doc.view_offset(view.id);
+    let mode_snapshot = cx.editor.mode;
     let config = cx.editor.config();
 
     let mut prompt = Prompt::new(
@@ -110,6 +111,7 @@ pub fn raw_regex_prompt(
                     let (view, doc) = current!(cx.editor);
                     doc.set_selection(view.id, snapshot.clone());
                     doc.set_view_offset(view.id, offset_snapshot);
+                    cx.editor.mode = mode_snapshot;
                 }
                 PromptEvent::Update | PromptEvent::Validate => {
                     // skip empty input

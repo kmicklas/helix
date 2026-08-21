@@ -7,9 +7,11 @@ use std::{
 
 use anyhow::bail;
 use crossterm::event::{Event, KeyEvent};
-use helix_core::{diagnostic::Severity, test, Selection, Transaction};
-use helix_term::{application::Application, args::Args, config::Config, keymap::merge_keys};
-use helix_view::{current_ref, doc, editor::LspConfig, input::parse_macro, Editor};
+use helix_core::{diagnostic::Severity, hashmap, test, Selection, Transaction};
+use helix_term::{
+    application::Application, args::Args, config::Config, keymap, keymap::merge_keys,
+};
+use helix_view::{current_ref, doc, document::Mode, editor::LspConfig, input::parse_macro, Editor};
 use tempfile::NamedTempFile;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
@@ -160,7 +162,8 @@ pub async fn test_key_sequences(
     }
 
     if !should_exit {
-        for key_event in parse_macro("<esc>:q!<ret>")?.into_iter() {
+        app.editor.mode = helix_view::document::Mode::Normal;
+        for key_event in parse_macro(":q!<ret>")?.into_iter() {
             tx.send(Ok(Event::Key(KeyEvent::from(key_event))))?;
         }
 
@@ -322,6 +325,7 @@ pub struct AppBuilder {
     config: Config,
     syn_loader: helix_core::syntax::Loader,
     input: Option<(String, Selection)>,
+    mode: Mode,
 }
 
 impl Default for AppBuilder {
@@ -331,6 +335,7 @@ impl Default for AppBuilder {
             config: test_config(),
             syn_loader: test_syntax_loader(None),
             input: None,
+            mode: Mode::Normal,
         }
     }
 }
@@ -364,12 +369,17 @@ impl AppBuilder {
         self
     }
 
+    pub fn with_mode(mut self, mode: Mode) -> Self {
+        self.mode = mode;
+        self
+    }
+
     pub fn with_lang_loader(mut self, syn_loader: helix_core::syntax::Loader) -> Self {
         self.syn_loader = syn_loader;
         self
     }
 
-    pub fn build(self) -> anyhow::Result<Application> {
+    pub fn build(mut self) -> anyhow::Result<Application> {
         if let Some(path) = &self.args.working_directory {
             bail!("Changing the working directory to {path:?} is not yet supported for integration tests");
         }
@@ -377,6 +387,18 @@ impl AppBuilder {
         if let Some((path, _)) = self.args.files.first().filter(|p| p.0.is_dir()) {
             bail!("Having the directory {path:?} in args.files[0] is not yet supported for integration tests");
         }
+
+        merge_keys(
+            &mut self.config.keys,
+            hashmap! {
+                Mode::Insert => keymap!({ "Insert mode"
+                    "esc" => normal_mode,
+                }),
+                Mode::Select => keymap!({ "Select mode"
+                    "v" => normal_mode,
+                }),
+            },
+        );
 
         let mut app = Application::new(self.args, self.config, self.syn_loader)?;
 
@@ -391,6 +413,8 @@ impl AppBuilder {
             // replace the initial text with the input text
             doc.apply(&trans, view.id);
         }
+
+        app.editor.mode = self.mode;
 
         Ok(app)
     }

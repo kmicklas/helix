@@ -1270,7 +1270,7 @@ impl Editor {
         area.height -= 1;
 
         Self {
-            mode: Mode::Normal,
+            mode: Mode::Insert,
             tree: Tree::new(area),
             next_document_id: DocumentId::default(),
             documents: BTreeMap::new(),
@@ -1692,7 +1692,9 @@ impl Editor {
         }
 
         if !matches!(action, Action::Load) {
-            self.enter_normal_mode();
+            if self.mode != Mode::Normal {
+                self.mode = Mode::Insert;
+            }
         }
 
         let focust_lost = match action {
@@ -2027,7 +2029,9 @@ impl Editor {
         // if leaving the view: mode should reset and the cursor should be
         // within view
         if prev_id != view_id {
-            self.enter_normal_mode();
+            if self.mode != Mode::Normal {
+                self.mode = Mode::Insert;
+            }
             self.ensure_cursor_in_view(view_id);
 
             // Update jumplist selections with new document changes.

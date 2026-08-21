@@ -2096,6 +2096,7 @@ fn select_regex(cx: &mut Context) {
                 selection::select_on_matches(text, doc.selection(view.id), &regex)
             {
                 doc.set_selection(view.id, selection);
+                cx.editor.mode = Mode::Select;
             } else {
                 cx.editor.set_error("nothing selected");
             }
@@ -3930,7 +3931,7 @@ fn select_mode(cx: &mut Context) {
 
 fn exit_select_mode(cx: &mut Context) {
     if cx.editor.mode == Mode::Select {
-        cx.editor.mode = Mode::Normal;
+        cx.editor.mode = Mode::Insert;
     }
 }
 
@@ -4155,6 +4156,35 @@ pub mod insert {
         }
 
         helix_event::dispatch(PostInsertChar { c, cx });
+    }
+
+    pub fn replace_selection_with_char(cx: &mut Context, c: char) {
+        let mut text = Tendril::new();
+        text.push(c);
+
+        let (view, doc) = current!(cx.editor);
+        let selection = doc.selection(view.id);
+        let mut offset = 0isize;
+        let mut ranges = SmallVec::with_capacity(selection.len());
+        let transaction = Transaction::change_by_selection(doc.text(), selection, |range| {
+            let cursor = (range.from() as isize + offset + 1) as usize;
+            ranges.push(Range::point(cursor));
+            offset += 1 - range.len() as isize;
+            (range.from(), range.to(), Some(text.clone()))
+        })
+        .with_selection(Selection::new(ranges, selection.primary_index()));
+        doc.apply(&transaction, view.id);
+
+        helix_event::dispatch(PostInsertChar { c, cx });
+    }
+
+    pub fn delete_selection(cx: &mut Context) {
+        let (view, doc) = current!(cx.editor);
+        let transaction =
+            Transaction::delete_by_selection(doc.text(), doc.selection(view.id), |range| {
+                (range.from(), range.to())
+            });
+        doc.apply(&transaction, view.id);
     }
 
     pub fn smart_tab(cx: &mut Context) {
@@ -4857,7 +4887,13 @@ fn paste_impl(
         ranges.push(new_range);
         offset += value_len;
 
-        (pos, pos, value)
+        let change = if matches!(action, Paste::Cursor) && mode == Mode::Select {
+            (range.from(), range.to())
+        } else {
+            (pos, pos)
+        };
+
+        (change.0, change.1, value)
     });
 
     if mode == Mode::Normal {
@@ -5870,6 +5906,7 @@ fn insert_register(cx: &mut Context) {
                 Paste::Cursor,
                 cx.count(),
             );
+            exit_select_mode(cx);
         }
     })
 }

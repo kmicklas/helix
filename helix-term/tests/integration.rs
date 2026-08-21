@@ -22,5 +22,6 @@ mod test {
     mod insert_keymap_suffix;
     mod languages;
     mod movement;
+    mod non_modal;
     mod splits;
 }

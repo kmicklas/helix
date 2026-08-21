@@ -841,6 +841,16 @@ impl EditorView {
         cxt.editor.autoinfo = self.keymaps.sticky().map(|node| node.infobox());
 
         let mut execute_command = |command: &commands::MappableCommand| {
+            if last_mode == Mode::Insert
+                && self.completion.is_none()
+                && cxt.editor.last_completion.is_none()
+                && !continues_insert_batch(command)
+            {
+                let (view, doc) = current!(cxt.editor);
+                doc.append_changes_to_history(view);
+                self.last_insert.1.clear();
+            }
+
             command.execute(cxt);
             helix_event::dispatch(PostCommand { command, cx: cxt });
 
@@ -916,6 +926,32 @@ impl EditorView {
                 }
             }
         }
+    }
+
+    fn enter_insert_mode(&mut self, cx: &mut commands::Context) -> Option<Mode> {
+        let old_mode = cx.editor.mode;
+        if old_mode == Mode::Insert {
+            return None;
+        }
+
+        cx.editor.mode = Mode::Insert;
+        Some(old_mode)
+    }
+
+    fn dispatch_mode_switch(&mut self, cx: &mut commands::Context, old_mode: Option<Mode>) {
+        let Some(old_mode) = old_mode else {
+            return;
+        };
+        let new_mode = cx.editor.mode;
+        if old_mode == new_mode {
+            return;
+        }
+
+        helix_event::dispatch(OnModeSwitch {
+            old_mode,
+            new_mode,
+            cx,
+        });
     }
 
     fn command_mode(&mut self, mode: Mode, cxt: &mut commands::Context, event: KeyEvent) {
@@ -1068,6 +1104,12 @@ impl EditorView {
     pub fn handle_idle_timeout(&mut self, cx: &mut commands::Context) -> EventResult {
         commands::compute_inlay_hints_for_all_views(cx.editor, cx.jobs);
 
+        if self.completion.is_none() && cx.editor.last_completion.is_none() {
+            let (view, doc) = current!(cx.editor);
+            doc.append_changes_to_history(view);
+            self.last_insert.1.clear();
+        }
+
         EventResult::Ignored(None)
     }
 }
@@ -1134,6 +1176,11 @@ impl EditorView {
             MouseEventKind::Down(MouseButton::Left) => {
                 let editor = &mut cxt.editor;
 
+                {
+                    let (view, doc) = current!(editor);
+                    doc.append_changes_to_history(view);
+                }
+
                 if let Some((pos, view_id)) = pos_and_view(editor, row, column, true) {
                     let prev_view_id = view!(editor).id;
                     let doc = doc_mut!(editor, &view!(editor, view_id).doc);
@@ -1198,6 +1245,7 @@ impl EditorView {
                 let primary = selection.primary_mut();
                 *primary = primary.put_cursor(doc.text().slice(..), pos, true);
                 doc.set_selection(view.id, selection);
+                cxt.editor.mode = Mode::Select;
                 let view_id = view.id;
                 cxt.editor.ensure_cursor_in_view(view_id);
                 EventResult::Consumed(None)
@@ -1426,10 +1474,28 @@ impl Component for EditorView {
                             if !consumed {
                                 self.insert_mode(&mut cx, key);
 
-                                // record last_insert key
                                 self.last_insert.1.push(InsertEvent::Key(key));
                             }
                         }
+                        Mode::Select if is_select_text_input(key) => match key.code {
+                            KeyCode::Char(c) => {
+                                let old_mode = self.enter_insert_mode(&mut cx);
+                                commands::insert::replace_selection_with_char(&mut cx, c);
+                                self.dispatch_mode_switch(&mut cx, old_mode);
+                            }
+                            KeyCode::Backspace | KeyCode::Delete => {
+                                let old_mode = self.enter_insert_mode(&mut cx);
+                                commands::insert::delete_selection(&mut cx);
+                                self.dispatch_mode_switch(&mut cx, old_mode);
+                            }
+                            KeyCode::Enter | KeyCode::Tab => {
+                                let old_mode = self.enter_insert_mode(&mut cx);
+                                commands::insert::delete_selection(&mut cx);
+                                self.insert_mode(&mut cx, key);
+                                self.dispatch_mode_switch(&mut cx, old_mode);
+                            }
+                            _ => unreachable!(),
+                        },
                         mode => self.command_mode(mode, &mut cx, key),
                     }
                 }
@@ -1625,4 +1691,33 @@ fn canonicalize_key(key: &mut KeyEvent) {
     {
         key.modifiers.remove(KeyModifiers::SHIFT)
     }
+}
+
+fn continues_insert_batch(command: &commands::MappableCommand) -> bool {
+    matches!(
+        command.name(),
+        "no_op"
+            | "delete_char_backward"
+            | "delete_char_forward"
+            | "delete_word_backward"
+            | "delete_word_forward"
+            | "kill_to_line_start"
+            | "kill_to_line_end"
+            | "insert_newline"
+            | "insert_tab"
+            | "smart_tab"
+            | "insert_register"
+    )
+}
+
+fn is_select_text_input(key: KeyEvent) -> bool {
+    let command_modifiers = KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER;
+    if key.modifiers.intersects(command_modifiers) {
+        return false;
+    }
+
+    matches!(
+        key.code,
+        KeyCode::Char(_) | KeyCode::Backspace | KeyCode::Delete | KeyCode::Enter | KeyCode::Tab
+    )
 }
