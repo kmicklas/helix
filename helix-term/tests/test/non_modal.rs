@@ -73,6 +73,28 @@ async fn comma_menu_escapes_replace_multiple_selections() -> anyhow::Result<()> 
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn shift_movement_selects_from_each_cursor() -> anyhow::Result<()> {
+    test_text(
+        non_modal_builder(),
+        "ab#[|]#cd ab#(|)#cd",
+        "<S-right>x",
+        "abx#[|]#d abx#(|)#d",
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn set_mark_extends_with_regular_movement() -> anyhow::Result<()> {
+    test_text(
+        non_modal_builder(),
+        "ab#[|]#cd ab#(|)#cd",
+        "<C-space><right><right>x",
+        "abx#[|]# abx#(|)#",
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn configured_select_regex_replaces_all_matches() -> anyhow::Result<()> {
     let mut config = Config::default();
     config.editor.auto_completion = false;

@@ -35,6 +35,7 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
         "E" => move_next_long_word_end,
 
         "v" => select_mode,
+        "C-space" => set_mark,
         "G" => goto_line,
         "g" => { "Goto"
             "g" => goto_file_start,
@@ -353,10 +354,13 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
     };
     let mut select = normal.clone();
     select.merge_nodes(keymap!({ "Select mode"
-        "h" | "left" => extend_char_left,
-        "j" | "down" => extend_visual_line_down,
-        "k" | "up" => extend_visual_line_up,
-        "l" | "right" => extend_char_right,
+        "h" | "left" | "S-left" => extend_char_left,
+        "j" | "down" | "S-down" => extend_visual_line_down,
+        "k" | "up" | "S-up" => extend_visual_line_up,
+        "l" | "right" | "S-right" => extend_char_right,
+
+        "C-S-left" => extend_prev_word_start,
+        "C-S-right" => extend_next_word_start,
 
         "w" => extend_next_word_start,
         "b" => extend_prev_word_start,
@@ -376,8 +380,8 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
         "T" => extend_till_prev_char,
         "F" => extend_prev_char,
 
-        "home" => extend_to_line_start,
-        "end" => extend_to_line_end,
+        "home" | "S-home" => extend_to_line_start,
+        "end" | "S-end" => extend_to_line_end_newline,
         "esc" => exit_select_mode,
 
         "v" => exit_select_mode,
@@ -394,6 +398,7 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
     let mut insert = keymap!({ "Insert mode"
         "esc" => collapse_selection,
         "C-;" => command_mode,
+        "C-space" => set_mark,
 
         "C-s" => commit_undo_checkpoint,
         "C-x" => completion,
@@ -413,10 +418,18 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
         "down" => move_visual_line_down,
         "left" => move_char_left,
         "right" => move_char_right,
+        "S-up" => [set_mark, extend_visual_line_up],
+        "S-down" => [set_mark, extend_visual_line_down],
+        "S-left" => [set_mark, extend_char_left],
+        "S-right" => [set_mark, extend_char_right],
+        "C-S-left" => [set_mark, extend_prev_word_start],
+        "C-S-right" => [set_mark, extend_next_word_start],
         "pageup" => page_up,
         "pagedown" => page_down,
         "home" => goto_line_start,
         "end" => goto_line_end_newline,
+        "S-home" => [set_mark, extend_to_line_start],
+        "S-end" => [set_mark, extend_to_line_end_newline],
     });
     insert.merge_nodes(menu_alias());
     hashmap!(

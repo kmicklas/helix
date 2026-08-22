@@ -554,6 +554,14 @@ mod tests {
                 "Ctrl-; should open command mode from {mode} mode"
             );
         }
+        let ctrl_space = "C-space".parse::<KeyEvent>().unwrap();
+        for mode in [Mode::Normal, Mode::Select, Mode::Insert] {
+            assert_eq!(
+                keymaps[&mode].search(&[ctrl_space]).unwrap(),
+                &KeyTrie::MappableCommand(MappableCommand::set_mark),
+                "Ctrl-Space should set the mark from {mode} mode"
+            );
+        }
     }
 
     #[test]

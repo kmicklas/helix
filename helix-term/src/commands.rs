@@ -417,6 +417,7 @@ impl MappableCommand {
         open_above, "Open new line above selection",
         normal_mode, "Enter normal mode",
         select_mode, "Enter selection extend mode",
+        set_mark, "Set selection mark at each cursor",
         exit_select_mode, "Exit selection mode",
         goto_definition, "Goto definition",
         goto_declaration, "Goto declaration",
@@ -728,24 +729,50 @@ type MoveFn =
 
 fn move_impl(cx: &mut Context, move_fn: MoveFn, dir: Direction, behaviour: Movement) {
     let count = cx.count();
+    let insertion_selection = behaviour == Movement::Extend && cx.editor.mode == Mode::Select;
     let (view, doc) = current!(cx.editor);
     let text = doc.text().slice(..);
     let text_fmt = doc.text_format(view.inner_area(doc).width, None);
     let mut annotations = view.text_annotations(doc, None);
 
     let selection = doc.selection(view.id).clone().transform(|range| {
-        move_fn(
+        let moved = move_fn(
             text,
-            range,
+            if insertion_selection {
+                Range {
+                    anchor: range.head,
+                    head: range.head,
+                    old_visual_position: range.old_visual_position,
+                }
+            } else {
+                range
+            },
             dir,
             count,
-            behaviour,
+            if insertion_selection {
+                Movement::Move
+            } else {
+                behaviour
+            },
             &text_fmt,
             &mut annotations,
-        )
+        );
+        if insertion_selection {
+            Range {
+                anchor: range.anchor,
+                head: moved.head,
+                old_visual_position: moved.old_visual_position,
+            }
+        } else {
+            moved
+        }
     });
     drop(annotations);
-    doc.set_selection(view.id, selection);
+    if insertion_selection {
+        doc.set_selection_raw(view.id, selection);
+    } else {
+        doc.set_selection(view.id, selection);
+    }
 }
 
 use helix_core::movement::{move_horizontally, move_vertically};
@@ -877,6 +904,17 @@ fn goto_line_end_newline(cx: &mut Context) {
 }
 
 fn extend_to_line_end_newline(cx: &mut Context) {
+    if cx.editor.mode == Mode::Select {
+        let (view, doc) = current!(cx.editor);
+        let text = doc.text().slice(..);
+        let selection = doc.selection(view.id).clone().transform(|range| {
+            let line = text.char_to_line(range.head);
+            Range::new(range.anchor, line_end_char_index(&text, line))
+        });
+        doc.set_selection_raw(view.id, selection);
+        return;
+    }
+
     let (view, doc) = current!(cx.editor);
     goto_line_end_newline_impl(view, doc, Movement::Extend)
 }
@@ -941,6 +979,17 @@ fn goto_buffer(editor: &mut Editor, direction: Direction, count: usize) {
 }
 
 fn extend_to_line_start(cx: &mut Context) {
+    if cx.editor.mode == Mode::Select {
+        let (view, doc) = current!(cx.editor);
+        let text = doc.text().slice(..);
+        let selection = doc.selection(view.id).clone().transform(|range| {
+            let line = text.char_to_line(range.head);
+            Range::new(range.anchor, text.line_to_char(line))
+        });
+        doc.set_selection_raw(view.id, selection);
+        return;
+    }
+
     let (view, doc) = current!(cx.editor);
     goto_line_start_impl(view, doc, Movement::Extend)
 }
@@ -1429,15 +1478,32 @@ where
     F: Fn(RopeSlice, Range, usize) -> Range,
 {
     let count = cx.count();
+    let insertion_selection = cx.editor.mode == Mode::Select;
     let (view, doc) = current!(cx.editor);
     let text = doc.text().slice(..);
 
     let selection = doc.selection(view.id).clone().transform(|range| {
-        let word = extend_fn(text, range, count);
+        let word = extend_fn(
+            text,
+            if insertion_selection {
+                Range::point(range.head)
+            } else {
+                range
+            },
+            count,
+        );
         let pos = word.cursor(text);
-        range.put_cursor(text, pos, true)
+        if insertion_selection {
+            Range::new(range.anchor, pos)
+        } else {
+            range.put_cursor(text, pos, true)
+        }
     });
-    doc.set_selection(view.id, selection);
+    if insertion_selection {
+        doc.set_selection_raw(view.id, selection);
+    } else {
+        doc.set_selection(view.id, selection);
+    }
 }
 
 fn extend_next_word_start(cx: &mut Context) {
@@ -3928,6 +3994,22 @@ fn select_mode(cx: &mut Context) {
     });
     doc.set_selection(view.id, selection);
 
+    cx.editor.mode = Mode::Select;
+}
+
+fn set_mark(cx: &mut Context) {
+    let use_head = cx.editor.mode == Mode::Select;
+    let (view, doc) = current!(cx.editor);
+    let text = doc.text().slice(..);
+    let selection = doc.selection(view.id).clone().transform(|range| {
+        let pos = if use_head {
+            range.head
+        } else {
+            range.cursor(text)
+        };
+        Range::point(pos)
+    });
+    doc.set_selection_raw(view.id, selection);
     cx.editor.mode = Mode::Select;
 }
 

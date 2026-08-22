@@ -1331,6 +1331,15 @@ impl Document {
         })
     }
 
+    /// Set insertion-style selections without enforcing Helix's one-grapheme minimum.
+    pub fn set_selection_raw(&mut self, view_id: ViewId, selection: Selection) {
+        self.selections.insert(view_id, selection);
+        helix_event::dispatch(SelectionDidChange {
+            doc: self,
+            view: view_id,
+        })
+    }
+
     /// Find the origin selection of the text in a document, i.e. where
     /// a single cursor would go if it were on the first grapheme. If
     /// the text is empty, returns (0, 0).
